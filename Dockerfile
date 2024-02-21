@@ -2,8 +2,8 @@ FROM debian:bookworm-slim
 
 ARG TARGETPLATFORM
 ARG S6_VERSION="3.1.5.0"
-ARG FFMPEG_DATE="autobuild-2023-11-29-14-19"
-ARG FFMPEG_VERSION="112875-g47e214245b"
+ARG FFMPEG_DATE="autobuild-2024-02-20-14-09"
+ARG FFMPEG_VERSION="113725-g37702e2066"
 
 ENV DEBIAN_FRONTEND="noninteractive" \
   HOME="/root" \
@@ -27,7 +27,7 @@ RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
   "linux/arm64")   echo "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-aarch64.tar.xz" ;; \
   *)               echo ""        ;; esac) && \
   export FFMPEG_EXPECTED_SHA256=$(case ${TARGETPLATFORM:-linux/amd64} in \
-  "linux/amd64")   echo "36bac8c527bf390603416f749ab0dd860142b0a66f0865b67366062a9c286c8b" ;; \
+  "linux/amd64")   echo "3a35116fea237ce2903635605bee14adca80bdb064c0da063a67c4662a8a878d" ;; \
   "linux/arm64")   echo "8f36e45d99d2367a5c0c220ee3164fa48f4f0cec35f78204ccced8dc303bfbdc" ;; \
   *)               echo ""        ;; esac) && \
   export FFMPEG_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
