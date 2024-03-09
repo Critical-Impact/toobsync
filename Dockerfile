@@ -2,8 +2,8 @@ FROM debian:bookworm-slim
 
 ARG TARGETPLATFORM
 ARG S6_VERSION="3.1.5.0"
-ARG FFMPEG_DATE="autobuild-2024-07-09-14-13"
-ARG FFMPEG_VERSION="116212-g85706f5136"
+ARG FFMPEG_DATE="autobuild-2024-02-25-15-18"
+ARG FFMPEG_VERSION="113818-gab2173c0a5"
 
 ENV DEBIAN_FRONTEND="noninteractive" \
   HOME="/root" \
@@ -27,8 +27,8 @@ RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
   "linux/arm64")   echo "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-aarch64.tar.xz" ;; \
   *)               echo ""        ;; esac) && \
   export FFMPEG_EXPECTED_SHA256=$(case ${TARGETPLATFORM:-linux/amd64} in \
-  "linux/amd64")   echo "1323f9849b8b115672e7b360071c460c76c183d270d3ded218467b0217a1f079" ;; \
-  "linux/arm64")   echo "ba915ab53b7846f6965da67a875812dd4b5193788a63f475da27480bba9f55b9" ;; \
+  "linux/amd64")   echo "afa5f7109e8c217f34d2d8641c28f90b0fec4182fadd638009eaefa2981fb69b" ;; \
+  "linux/arm64")   echo "ce7f31aae25cbf9640f26dc2690791d7374089fbe1f3bf9f18a26ec52b08c01c" ;; \
   *)               echo ""        ;; esac) && \
   export FFMPEG_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
   "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/${FFMPEG_DATE}/ffmpeg-N-${FFMPEG_VERSION}-linux64-gpl.tar.xz"   ;; \
@@ -61,30 +61,11 @@ RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
   # Clean up
   rm -rf /tmp/s6-overlay-${ARCH}.tar.gz && \
   rm -rf /tmp/ffmpeg-${ARCH}.tar.xz && \
-  apt-get -y autoremove --purge curl binutils xz-utils && \
-  rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/apt/* && \
-  rm -rf /tmp/*
+  apt-get -y autoremove --purge curl binutils xz-utils
 
-# Install dependencies we keep
-RUN set -x && \
-  apt-get update && \
-  # Install required distro packages
-  apt-get -y --no-install-recommends install \
-  libjpeg62-turbo \
-  libmariadb3 \
-  libpq5 \
-  libwebp7 \
-  nginx-light \
-  pipenv \
-  pkgconf \
-  python3 \
-  python3-wheel \
-  redis-server \
-  && apt-get -y autoclean && \
-  rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/apt/* && \
-  rm -rf /tmp/*
+# Copy app
+COPY tubesync /app
+COPY tubesync/tubesync/local_settings.py.container /app/tubesync/local_settings.py
 
 # Copy over pip.conf to use piwheels
 COPY pip.conf /etc/pip.conf
@@ -98,41 +79,60 @@ WORKDIR /app
 # Set up the app
 RUN set -x && \
   apt-get update && \
-  # Install required build packages
+  # Install required distro packages
+  apt-get -y install nginx-light && \
   apt-get -y --no-install-recommends install \
-  default-libmysqlclient-dev \
-  g++ \
-  gcc \
-  libjpeg-dev \
-  libpq-dev \
-  libwebp-dev \
-  make \
-  postgresql-common \
+  cron \
+  python3 \
   python3-dev \
   python3-pip \
+  python3-wheel \
+  pipenv \
+  gcc \
+  g++ \
+  make \
+  pkgconf \
+  default-libmysqlclient-dev \
+  libmariadb3 \
+  postgresql-common \
+  libpq-dev \
+  libpq5 \
+  libjpeg62-turbo \
+  libwebp7 \
+  libjpeg-dev \
   zlib1g-dev \
-  && \
+  libwebp-dev \
+  redis-server && \
   # Create a 'app' user which the application will run as
   groupadd app && \
   useradd -M -d /app -s /bin/false -g app app && \
   # Install non-distro packages
   PIPENV_VERBOSITY=64 pipenv install --system --skip-lock && \
+  # Make absolutely sure we didn't accidentally bundle a SQLite dev database
+  rm -rf /app/db.sqlite3 && \
+  # Run any required app commands
+  /usr/bin/python3 /app/manage.py compilescss && \
+  /usr/bin/python3 /app/manage.py collectstatic --no-input --link && \
+  # Create config, downloads and run dirs
+  mkdir -p /run/app && \
+  mkdir -p /config/media && \
+  mkdir -p /downloads/audio && \
+  mkdir -p /downloads/video && \
   # Clean up
   rm /app/Pipfile && \
   pipenv --clear && \
   apt-get -y autoremove --purge \
-  default-libmysqlclient-dev \
-  g++ \
-  gcc \
-  libjpeg-dev \
-  libpq-dev \
-  libwebp-dev \
-  make \
-  postgresql-common \
-  python3-dev \
   python3-pip \
+  python3-dev \
+  gcc \
+  g++ \
+  make \
+  default-libmysqlclient-dev \
+  postgresql-common \
+  libpq-dev \
+  libjpeg-dev \
   zlib1g-dev \
-  && \
+  libwebp-dev && \
   apt-get -y autoremove && \
   apt-get -y autoclean && \
   rm -rf /var/lib/apt/lists/* && \
@@ -144,29 +144,16 @@ RUN set -x && \
   chown root:root /root && \
   chmod 0755 /root
 
-
-# Copy app
-COPY tubesync /app
-COPY tubesync/tubesync/local_settings.py.container /app/tubesync/local_settings.py
-
-# Build app
-RUN set -x && \
-  # Make absolutely sure we didn't accidentally bundle a SQLite dev database
-  rm -rf /app/db.sqlite3 && \
-  # Run any required app commands
-  /usr/bin/python3 /app/manage.py compilescss && \
-  /usr/bin/python3 /app/manage.py collectstatic --no-input --link && \
-  # Create config, downloads and run dirs
-  mkdir -p /run/app && \
-  mkdir -p /config/media && \
-  mkdir -p /downloads/audio && \
-  mkdir -p /downloads/video
-
-
 # Append software versions
 RUN set -x && \
   FFMPEG_VERSION=$(/usr/local/bin/ffmpeg -version | head -n 1 | awk '{ print $3 }') && \
   echo "ffmpeg_version = '${FFMPEG_VERSION}'" >> /app/common/third_party_versions.py
+
+RUN echo "0 * * * * /usr/bin/python3 /app/manage.py unlock-tasks" > /etc/cron.d/my_cron_job
+
+RUN chmod 0644 /etc/cron.d/my_cron_job
+
+RUN crontab /etc/cron.d/my_cron_job
 
 # Copy root
 COPY config/root /
@@ -175,7 +162,7 @@ COPY config/root /
 HEALTHCHECK --interval=1m --timeout=10s CMD /app/healthcheck.py http://127.0.0.1:8080/healthcheck
 
 # ENVS and ports
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH "/app:${PYTHONPATH}"
 EXPOSE 4848
 
 # Volumes
