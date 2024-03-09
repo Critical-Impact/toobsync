@@ -1,21 +1,9 @@
 FROM debian:bookworm-slim
 
-ARG TARGETARCH
 ARG TARGETPLATFORM
-
-ARG S6_VERSION="3.2.0.2"
-ARG SHA256_S6_AMD64="59289456ab1761e277bd456a95e737c06b03ede99158beb24f12b165a904f478"
-ARG SHA256_S6_ARM64="8b22a2eaca4bf0b27a43d36e65c89d2701738f628d1abd0cea5569619f66f785"
-ARG SHA256_S6_NOARCH="6dbcde158a3e78b9bb141d7bcb5ccb421e563523babbe2c64470e76f4fd02dae"
-
-ARG FFMPEG_DATE="autobuild-2024-12-09-14-16"
-ARG FFMPEG_VERSION="118034-gd21134313f"
-ARG SHA256_FFMPEG_AMD64="cd50122fb0939e913585282347a8f95074c2d5477ceb059cd90aca551f14e9ea"
-ARG SHA256_FFMPEG_ARM64="33b4edebf9c23701473ba8db696b26072bb9b9c05fc4a156e115f94e44d361e0"
-
-ENV S6_VERSION="${S6_VERSION}" \
-  FFMPEG_DATE="${FFMPEG_DATE}" \
-  FFMPEG_VERSION="${FFMPEG_VERSION}"
+ARG S6_VERSION="3.1.5.0"
+ARG FFMPEG_DATE="autobuild-2024-02-25-15-18"
+ARG FFMPEG_VERSION="113818-gab2173c0a5"
 
 ENV DEBIAN_FRONTEND="noninteractive" \
   HOME="/root" \
@@ -26,111 +14,58 @@ ENV DEBIAN_FRONTEND="noninteractive" \
   S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0"
 
 # Install third party software
-# Reminder: the SHELL handles all variables
-RUN decide_arch() { \
-      case "${TARGETARCH:=amd64}" in \
-        (arm64) printf -- 'aarch64' ;; \
-        (*) printf -- '%s' "${TARGETARCH}" ;; \
-      esac ; \
-    } && \
-    decide_expected() { \
-      case "${1}" in \
-        (ffmpeg) case "${2}" in \
-            (amd64) printf -- '%s' "${SHA256_FFMPEG_AMD64}" ;; \
-            (arm64) printf -- '%s' "${SHA256_FFMPEG_ARM64}" ;; \
-          esac ;; \
-        (s6) case "${2}" in \
-            (amd64) printf -- '%s' "${SHA256_S6_AMD64}" ;; \
-            (arm64) printf -- '%s' "${SHA256_S6_ARM64}" ;; \
-            (noarch) printf -- '%s' "${SHA256_S6_NOARCH}" ;; \
-          esac ;; \
-      esac ; \
-    } && \
-    decide_url() { \
-      case "${1}" in \
-        (ffmpeg) printf -- \
-          'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/%s/ffmpeg-N-%s-linux%s-gpl.tar.xz' \
-          "${FFMPEG_DATE}" \
-          "${FFMPEG_VERSION}" \
-          "$(case "${2}" in \
-            (amd64) printf -- '64' ;; \
-            (*) printf -- '%s' "${2}" ;; \
-          esac)" ;; \
-        (s6) printf -- \
-          'https://github.com/just-containers/s6-overlay/releases/download/v%s/s6-overlay-%s.tar.xz' \
-          "${S6_VERSION}" \
-          "$(case "${2}" in \
-            (amd64) printf -- 'x86_64' ;; \
-            (arm64) printf -- 'aarch64' ;; \
-            (*) printf -- '%s' "${2}" ;; \
-          esac)" ;; \
-      esac ; \
-    } && \
-    verify_download() { \
-      while [ $# -ge 2 ] ; do \
-        sha256sum "${2}" ; \
-        printf -- '%s  %s\n' "${1}" "${2}" | sha256sum -c || return ; \
-        shift ; shift ; \
-      done ; \
-    } && \
-    download_expected_file() { \
-      local arg1 expected file url ; \
-      arg1="$(printf -- '%s\n' "${1}" | awk '{print toupper($0);}')" ; \
-      expected="$(decide_expected "${1}" "${2}")" ; \
-      file="${3}" ; \
-      url="$(decide_url "${1}" "${2}")" ; \
-      printf -- '%s\n' \
-        "Building for arch: ${2}|${ARCH}, downloading ${arg1} from: ${url}, expecting ${arg1} SHA256: ${expected}" && \
-      rm -rf "${file}" && \
-      curl --disable --output "${file}" --clobber --location --no-progress-meter --url "${url}" && \
-      verify_download "${expected}" "${file}" ; \
-    } && \
-  export ARCH="$(decide_arch)" && \
+RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
+  "linux/amd64")   echo "amd64"  ;; \
+  "linux/arm64")   echo "aarch64" ;; \
+  *)               echo ""        ;; esac) && \
+  export S6_ARCH_EXPECTED_SHA256=$(case ${TARGETPLATFORM:-linux/amd64} in \
+  "linux/amd64")   echo "65d0d0f353d2ff9d0af202b268b4bf53a9948a5007650854855c729289085739" ;; \
+  "linux/arm64")   echo "3fbd14201473710a592b2189e81f00f3c8998e96d34f16bd2429c35d1bc36d00" ;; \
+  *)               echo ""        ;; esac) && \
+  export S6_DOWNLOAD_ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
+  "linux/amd64")   echo "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-x86_64.tar.xz"   ;; \
+  "linux/arm64")   echo "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-aarch64.tar.xz" ;; \
+  *)               echo ""        ;; esac) && \
+  export FFMPEG_EXPECTED_SHA256=$(case ${TARGETPLATFORM:-linux/amd64} in \
+  "linux/amd64")   echo "afa5f7109e8c217f34d2d8641c28f90b0fec4182fadd638009eaefa2981fb69b" ;; \
+  "linux/arm64")   echo "ce7f31aae25cbf9640f26dc2690791d7374089fbe1f3bf9f18a26ec52b08c01c" ;; \
+  *)               echo ""        ;; esac) && \
+  export FFMPEG_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
+  "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/${FFMPEG_DATE}/ffmpeg-N-${FFMPEG_VERSION}-linux64-gpl.tar.xz"   ;; \
+  "linux/arm64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/${FFMPEG_DATE}/ffmpeg-N-${FFMPEG_VERSION}-linuxarm64-gpl.tar.xz" ;; \
+  *)               echo ""        ;; esac) && \
+  export S6_NOARCH_EXPECTED_SHA256="fd80c231e8ae1a0667b7ae2078b9ad0e1269c4d117bf447a4506815a700dbff3" && \
+  export S6_DOWNLOAD_NOARCH="https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-noarch.tar.xz" && \
+  echo "Building for arch: ${ARCH}|${ARCH44}, downloading S6 from: ${S6_DOWNLOAD}}, expecting S6 SHA256: ${S6_EXPECTED_SHA256}" && \
   set -x && \
   apt-get update && \
   apt-get -y --no-install-recommends install locales && \
-  printf -- "en_US.UTF-8 UTF-8\n" > /etc/locale.gen && \
+  echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
   locale-gen en_US.UTF-8 && \
   # Install required distro packages
-  apt-get -y --no-install-recommends install curl ca-certificates file binutils xz-utils && \
+  apt-get -y --no-install-recommends install curl ca-certificates binutils xz-utils && \
   # Install s6
-  _file="/tmp/s6-overlay-noarch.tar.xz" && \
-  download_expected_file s6 noarch "${_file}" && \
-  tar -C / -xpf "${_file}" && rm -f "${_file}" && \
-  _file="/tmp/s6-overlay-${ARCH}.tar.xz" && \
-  download_expected_file s6 "${TARGETARCH}" "${_file}" && \
-  tar -C / -xpf "${_file}" && rm -f "${_file}" && \
-  file -L /command/s6-overlay-suexec && \
+  curl -L ${S6_DOWNLOAD_NOARCH} --output /tmp/s6-overlay-noarch.tar.xz && \
+  echo "${S6_NOARCH_EXPECTED_SHA256}  /tmp/s6-overlay-noarch.tar.xz" | sha256sum -c - && \
+  tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
+  curl -L ${S6_DOWNLOAD_ARCH} --output /tmp/s6-overlay-${ARCH}.tar.xz && \
+  echo "${S6_ARCH_EXPECTED_SHA256}  /tmp/s6-overlay-${ARCH}.tar.xz" | sha256sum -c - && \
+  tar -C / -Jxpf /tmp/s6-overlay-${ARCH}.tar.xz && \
   # Install ffmpeg
-  _file="/tmp/ffmpeg-${ARCH}.tar.xz" && \
-  download_expected_file ffmpeg "${TARGETARCH}" "${_file}" && \
-  tar -xvvpf "${_file}" --strip-components=2 --no-anchored -C /usr/local/bin/ "ffmpeg" "ffprobe" && rm -f "${_file}" && \
-  file /usr/local/bin/ff* && \
+  echo "Building for arch: ${ARCH}|${ARCH44}, downloading FFMPEG from: ${FFMPEG_DOWNLOAD}, expecting FFMPEG SHA256: ${FFMPEG_EXPECTED_SHA256}" && \
+  curl -L ${FFMPEG_DOWNLOAD} --output /tmp/ffmpeg-${ARCH}.tar.xz && \
+  sha256sum /tmp/ffmpeg-${ARCH}.tar.xz && \
+  echo "${FFMPEG_EXPECTED_SHA256}  /tmp/ffmpeg-${ARCH}.tar.xz" | sha256sum -c - && \
+  tar -xf /tmp/ffmpeg-${ARCH}.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffmpeg" && \
+  tar -xf /tmp/ffmpeg-${ARCH}.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffprobe" && \
   # Clean up
-  apt-get -y autoremove --purge curl file binutils xz-utils && \
-  rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/apt/* && \
-  rm -rf /tmp/*
+  rm -rf /tmp/s6-overlay-${ARCH}.tar.gz && \
+  rm -rf /tmp/ffmpeg-${ARCH}.tar.xz && \
+  apt-get -y autoremove --purge curl binutils xz-utils
 
-# Install dependencies we keep
-RUN set -x && \
-  apt-get update && \
-  # Install required distro packages
-  apt-get -y --no-install-recommends install \
-  libjpeg62-turbo \
-  libmariadb3 \
-  libpq5 \
-  libwebp7 \
-  nginx-light \
-  pipenv \
-  pkgconf \
-  python3 \
-  python3-wheel \
-  redis-server \
-  && apt-get -y autoclean && \
-  rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/apt/* && \
-  rm -rf /tmp/*
+# Copy app
+COPY tubesync /app
+COPY tubesync/tubesync/local_settings.py.container /app/tubesync/local_settings.py
 
 # Copy over pip.conf to use piwheels
 COPY pip.conf /etc/pip.conf
@@ -144,73 +79,81 @@ WORKDIR /app
 # Set up the app
 RUN set -x && \
   apt-get update && \
-  # Install required build packages
+  # Install required distro packages
+  apt-get -y install nginx-light && \
   apt-get -y --no-install-recommends install \
-  default-libmysqlclient-dev \
-  g++ \
-  gcc \
-  libjpeg-dev \
-  libpq-dev \
-  libwebp-dev \
-  make \
-  postgresql-common \
+  cron \
+  python3 \
   python3-dev \
   python3-pip \
+  python3-wheel \
+  pipenv \
+  gcc \
+  g++ \
+  make \
+  pkgconf \
+  default-libmysqlclient-dev \
+  libmariadb3 \
+  postgresql-common \
+  libpq-dev \
+  libpq5 \
+  libjpeg62-turbo \
+  libwebp7 \
+  libjpeg-dev \
   zlib1g-dev \
-  && \
+  libwebp-dev \
+  redis-server && \
   # Create a 'app' user which the application will run as
   groupadd app && \
   useradd -M -d /app -s /bin/false -g app app && \
   # Install non-distro packages
-  cp -at /tmp/ "${HOME}" && \
-  PIPENV_VERBOSITY=64 HOME="/tmp/${HOME#/}" pipenv install --system --skip-lock && \
-  # Clean up
-  rm /app/Pipfile && \
-  pipenv --clear && \
-  apt-get -y autoremove --purge \
-  default-libmysqlclient-dev \
-  g++ \
-  gcc \
-  libjpeg-dev \
-  libpq-dev \
-  libwebp-dev \
-  make \
-  postgresql-common \
-  python3-dev \
-  python3-pip \
-  zlib1g-dev \
-  && \
-  apt-get -y autoremove && \
-  apt-get -y autoclean && \
-  rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/apt/* && \
-  rm -rf /tmp/*
-
-
-# Copy app
-COPY tubesync /app
-COPY tubesync/tubesync/local_settings.py.container /app/tubesync/local_settings.py
-
-# Build app
-RUN set -x && \
+  PIPENV_VERBOSITY=64 pipenv install --system --skip-lock && \
   # Make absolutely sure we didn't accidentally bundle a SQLite dev database
   rm -rf /app/db.sqlite3 && \
   # Run any required app commands
   /usr/bin/python3 /app/manage.py compilescss && \
   /usr/bin/python3 /app/manage.py collectstatic --no-input --link && \
   # Create config, downloads and run dirs
-  mkdir -v -p /run/app && \
-  mkdir -v -p /config/media && \
-  mkdir -v -p /downloads/audio && \
-  mkdir -v -p /downloads/video
-
+  mkdir -p /run/app && \
+  mkdir -p /config/media && \
+  mkdir -p /downloads/audio && \
+  mkdir -p /downloads/video && \
+  # Clean up
+  rm /app/Pipfile && \
+  pipenv --clear && \
+  apt-get -y autoremove --purge \
+  python3-pip \
+  python3-dev \
+  gcc \
+  g++ \
+  make \
+  default-libmysqlclient-dev \
+  postgresql-common \
+  libpq-dev \
+  libjpeg-dev \
+  zlib1g-dev \
+  libwebp-dev && \
+  apt-get -y autoremove && \
+  apt-get -y autoclean && \
+  rm -rf /var/lib/apt/lists/* && \
+  rm -rf /var/cache/apt/* && \
+  rm -rf /tmp/* && \
+  # Pipenv leaves a bunch of stuff in /root, as we're not using it recreate it
+  rm -rf /root && \
+  mkdir -p /root && \
+  chown root:root /root && \
+  chmod 0755 /root
 
 # Append software versions
 RUN set -x && \
-  /usr/local/bin/ffmpeg -version && \
-  FFMPEG_VERSION=$(/usr/local/bin/ffmpeg -version | awk -v 'ev=31' '1 == NR && "ffmpeg" == $1 { print $3; ev=0; } END { exit ev; }') && \
-  test -n "${FFMPEG_VERSION}" && \
-  printf -- "ffmpeg_version = '%s'\n" "${FFMPEG_VERSION}" >> /app/common/third_party_versions.py
+  FFMPEG_VERSION=$(/usr/local/bin/ffmpeg -version | head -n 1 | awk '{ print $3 }') && \
+  echo "ffmpeg_version = '${FFMPEG_VERSION}'" >> /app/common/third_party_versions.py
+
+RUN echo "0 * * * * /usr/bin/python3 /app/manage.py unlock-tasks" > /etc/cron.d/my_cron_job
+
+RUN chmod 0644 /etc/cron.d/my_cron_job
+
+RUN crontab /etc/cron.d/my_cron_job
 
 # Copy root
 COPY config/root /
@@ -219,7 +162,7 @@ COPY config/root /
 HEALTHCHECK --interval=1m --timeout=10s CMD /app/healthcheck.py http://127.0.0.1:8080/healthcheck
 
 # ENVS and ports
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH "/app:${PYTHONPATH}"
 EXPOSE 4848
 
 # Volumes
