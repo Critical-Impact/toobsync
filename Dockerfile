@@ -82,6 +82,7 @@ RUN set -x && \
   # Install required distro packages
   apt-get -y install nginx-light && \
   apt-get -y --no-install-recommends install \
+  cron \
   python3 \
   python3-dev \
   python3-pip \
@@ -147,6 +148,12 @@ RUN set -x && \
 RUN set -x && \
   FFMPEG_VERSION=$(/usr/local/bin/ffmpeg -version | head -n 1 | awk '{ print $3 }') && \
   echo "ffmpeg_version = '${FFMPEG_VERSION}'" >> /app/common/third_party_versions.py
+
+RUN echo "0 * * * * /usr/bin/python3 /app/manage.py unlock-tasks" > /etc/cron.d/my_cron_job
+
+RUN chmod 0644 /etc/cron.d/my_cron_job
+
+RUN crontab /etc/cron.d/my_cron_job
 
 # Copy root
 COPY config/root /
