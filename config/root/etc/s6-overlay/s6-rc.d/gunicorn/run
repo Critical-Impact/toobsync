@@ -20,7 +20,5 @@ then
     rm ${PIDFILE}
 fi
 
-exec cron -f
-
 exec s6-setuidgid app \
     /usr/local/bin/gunicorn -c /app/tubesync/gunicorn.py --capture-output tubesync.wsgi:application
