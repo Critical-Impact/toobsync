@@ -3,7 +3,7 @@ FROM debian:bookworm-slim
 ARG TARGETPLATFORM
 ARG S6_VERSION="3.1.5.0"
 ARG FFMPEG_DATE="autobuild-2024-02-25-15-18"
-ARG FFMPEG_VERSION="113818-gab2173c0a5"
+ARG FFMPEG_VERSION="6.1"
 
 ENV DEBIAN_FRONTEND="noninteractive" \
   HOME="/root" \
@@ -31,8 +31,8 @@ RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
   "linux/arm64")   echo "ce7f31aae25cbf9640f26dc2690791d7374089fbe1f3bf9f18a26ec52b08c01c" ;; \
   *)               echo ""        ;; esac) && \
   export FFMPEG_DOWNLOAD=$(case ${TARGETPLATFORM:-linux/amd64} in \
-  "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/${FFMPEG_DATE}/ffmpeg-N-${FFMPEG_VERSION}-linux64-gpl.tar.xz"   ;; \
-  "linux/arm64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/${FFMPEG_DATE}/ffmpeg-N-${FFMPEG_VERSION}-linuxarm64-gpl.tar.xz" ;; \
+  "linux/amd64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-n${FFMPEG_VERSION}-latest-linux64-gpl-${FFMPEG_VERSION}.tar.xz"   ;; \
+  "linux/arm64")   echo "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-n${FFMPEG_VERSION}-latest-linuxarm64-gpl-${FFMPEG_VERSION}.tar.xz" ;; \
   *)               echo ""        ;; esac) && \
   export S6_NOARCH_EXPECTED_SHA256="fd80c231e8ae1a0667b7ae2078b9ad0e1269c4d117bf447a4506815a700dbff3" && \
   export S6_DOWNLOAD_NOARCH="https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-noarch.tar.xz" && \
@@ -52,10 +52,8 @@ RUN export ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
   echo "${S6_ARCH_EXPECTED_SHA256}  /tmp/s6-overlay-${ARCH}.tar.xz" | sha256sum -c - && \
   tar -C / -Jxpf /tmp/s6-overlay-${ARCH}.tar.xz && \
   # Install ffmpeg
-  echo "Building for arch: ${ARCH}|${ARCH44}, downloading FFMPEG from: ${FFMPEG_DOWNLOAD}, expecting FFMPEG SHA256: ${FFMPEG_EXPECTED_SHA256}" && \
+  echo "Building for arch: ${ARCH}|${ARCH44}, downloading FFMPEG from: ${FFMPEG_DOWNLOAD}" && \
   curl -L ${FFMPEG_DOWNLOAD} --output /tmp/ffmpeg-${ARCH}.tar.xz && \
-  sha256sum /tmp/ffmpeg-${ARCH}.tar.xz && \
-  echo "${FFMPEG_EXPECTED_SHA256}  /tmp/ffmpeg-${ARCH}.tar.xz" | sha256sum -c - && \
   tar -xf /tmp/ffmpeg-${ARCH}.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffmpeg" && \
   tar -xf /tmp/ffmpeg-${ARCH}.tar.xz --strip-components=2 --no-anchored -C /usr/local/bin/ "ffprobe" && \
   # Clean up
