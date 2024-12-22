@@ -2,8 +2,7 @@ FROM debian:bookworm-slim
 
 ARG TARGETPLATFORM
 ARG S6_VERSION="3.1.5.0"
-ARG FFMPEG_DATE="autobuild-2024-02-25-15-18"
-ARG FFMPEG_VERSION="7.0"
+ARG FFMPEG_VERSION="7.1"
 
 ENV DEBIAN_FRONTEND="noninteractive" \
   HOME="/root" \
